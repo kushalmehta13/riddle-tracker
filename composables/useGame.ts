@@ -1,72 +1,105 @@
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
+import { usePlayers } from './usePlayers'
+
+const GAMES_STORAGE_KEY = 'riddle-games'
+
+export interface GameEntry {
+  date: string // Use a string format like 'YYYY-MM-DD' or Date.toDateString()
+  asker: string
+  answerer: string
+  riddle: string
+  answer: string
+  timer: number // Time in seconds
+  attempts: number
+  result: 'Solved' | 'Unsolved'
+  notes?: string
+}
 
 /**
- * useGame composable
- *
- * Manages game entries in local storage.
+ * Composable to manage game data using local storage.
+ * Provides functions to add game entries, retrieve all games, and find games by date.
  */
-export interface GameEntry {
-  id: string;
-  date: string; // ISO date
-  asker: string;
-  answerer: string;
-  question: string;
-  expectedAnswer: string;
-  actualAnswer: string;
-  score: 0 | 0.5 | 1;
-  responseTime?: number;
-}
+export function useGame() {
+  const games: Ref<GameEntry[]> = ref(loadGames())
 
-const STORAGE_KEY = 'riddle-games'
-const games = ref<GameEntry[]>([])
-
-function loadGames() {
-  if (typeof window !== 'undefined') {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        games.value = JSON.parse(stored)
-      } catch {
-        games.value = []
+  /**
+   * Loads game entries from local storage.
+   * @returns {GameEntry[]} An array of game entries.
+   */
+  function loadGames(): GameEntry[] {
+    if (typeof window !== 'undefined') {
+      const storedGames = localStorage.getItem(GAMES_STORAGE_KEY)
+      if (storedGames) {
+        try {
+          // Parse and return the stored games. Ensure dates are handled if needed later.
+          return JSON.parse(storedGames) as GameEntry[]
+        } catch (e) {
+          console.error('Failed to parse games from local storage:', e)
+          return []
+        }
       }
     }
+    return []
   }
-}
 
-function saveGames() {
-  if (typeof window !== 'undefined') {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(games.value))
+  /**
+   * Saves the current game entries to local storage.
+   * @param {GameEntry[]} currentGames - The array of game entries to save.
+   */
+  function saveGames(currentGames: GameEntry[]) {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(GAMES_STORAGE_KEY, JSON.stringify(currentGames))
+    }
   }
-}
 
-function getGames(): GameEntry[] {
-  if (!games.value.length) loadGames()
-  return games.value
-}
+  /**
+   * Adds a new game entry to the list and saves to local storage.
+   * @param {GameEntry} game - The game entry to add.
+   */
+  function addGame(game: GameEntry) {
+    // In a real application, you might want more robust validation or checks
+    // For this app, we allow multiple games on the same day with different asker/answerer
+    games.value.push(game)
+    saveGames(games.value)
+  }
 
-function getGamesForToday(): GameEntry[] {
-  loadGames()
-  const today = new Date().toISOString().split('T')[0]
-  return games.value.filter(g => g.date === today)
-}
+  /**
+   * Retrieves all game entries.
+   * @returns {GameEntry[]} An array of all game entries.
+   */
+  function getGames(): GameEntry[] {
+    return games.value
+  }
 
-function addGame(entry: GameEntry) {
-  // Prevent duplicate for same date and players
-  const exists = games.value.find(
-    g => g.date === entry.date && g.asker === entry.asker && g.answerer === entry.answerer
-  )
-  if (exists) return false
-  games.value.push(entry)
-  saveGames()
-  return true
-}
+  /**
+   * Retrieves game entries for the current date.
+   * @returns {GameEntry[]} An array of game entries for the current date.
+   */
+  function getGamesForToday(): GameEntry[] {
+    const today = new Date().toDateString()
+    return games.value.filter(game => game.date === today)
+  }
 
-function findGameByDate(date: string, asker: string, answerer: string): GameEntry | undefined {
-  if (!games.value.length) loadGames()
-  return games.value.find(g => g.date === date && g.asker === asker && g.answerer === answerer)
-}
 
-export function useGame() {
-  loadGames() // Load games initially
-  return { games, getGames, getGamesForToday, addGame, findGameByDate }
+  /**
+   * Finds a specific game entry by date and asker/answerer.
+   * This might be useful later for editing or viewing a specific game.
+   * @param {string} dateString - The date of the game.
+   * @param {string} asker - The asker in the game.
+   * @param {string} answerer - The answerer in the game.
+   * @returns {GameEntry | undefined} The found game entry or undefined if not found.
+   */
+  function findGame(dateString: string, asker: string, answerer: string): GameEntry | undefined {
+    return games.value.find(game =>
+      game.date === dateString && game.asker === asker && game.answerer === answerer
+    )
+  }
+
+  return {
+    games,
+    addGame,
+    getGames,
+    getGamesForToday,
+    findGame,
+  }
 }
